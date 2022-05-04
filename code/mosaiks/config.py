@@ -46,7 +46,8 @@ else:
     os.environ["MOSAIKS_HOME"] = root_dir
 
 code_dir = os.environ.get("MOSAIKS_CODE", join(root_dir, "code"))
-data_dir = os.environ.get("MOSAIKS_DATA", join(root_dir, "data"))
+#data_dir = os.environ.get("MOSAIKS_DATA", join(root_dir, "data"))
+data_dir = "/datadrive/mosaiks/data/"
 grid_dir = join(data_dir, "int", "grids")
 features_dir = join(data_dir, "int", "feature_matrices")
 out_dir = join(data_dir, "output")

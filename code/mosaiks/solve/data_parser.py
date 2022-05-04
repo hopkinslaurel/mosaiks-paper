@@ -1,6 +1,7 @@
 import csv
 
 import numpy as np
+import pandas as pd
 
 from .. import transforms
 from ..utils import io as mio
@@ -53,6 +54,7 @@ def csv_to_np(csv_file, y_labels, id_label="ID", return_ll=True):
 
 
 def merge(df_w_subset, *dfs):
+
     """Take dataframes containing relevant values (e.g. lat/lons, y, X matrices) and
     return numpy arrays that are properly sorted to the index of the first input
     dataframe.
@@ -70,7 +72,36 @@ def merge(df_w_subset, *dfs):
     list of :class:`numpy.ndarray`
         The consistently sorted arrays, in the same order as the input DataFrames.
     """
+
     return [df_w_subset.values] + [d.reindex(df_w_subset.index).values for d in dfs]
+
+
+def merge_YXsplit(Y, y_label, X, split):
+    ## function to create column for merging; pastes rounded lat_lon
+    def paste_latlon(lat, lon):
+        return str(round(lat, 4)) + "_" + str(round(lon, 4))
+
+    ## get column names
+    X_cols = list(X.columns)
+    split_cols = list(split.columns)
+
+    ## merge X and split
+    X_split = pd.merge(split, X, how="inner", left_index=True, right_index=True)
+    X_split["latlon"] = X_split.apply(lambda x: paste_latlon(x["lat"], x["lon"]), axis=1)
+
+    ## create latlon column for merging
+    Y["latlon"] = Y.apply(lambda x: paste_latlon(x["lat"], x["lon"]), axis=1)
+
+    ## merge X and split with Y
+    full_df = pd.merge(Y, X_split, how="inner", on="latlon")
+    full_df.rename(columns={'lat_x': 'lat', 'lon_x': 'lon'}, inplace=True)
+
+    Y = full_df[[y_label]].to_numpy()
+    X = full_df[X_cols].to_numpy()
+    split = full_df[split_cols].to_numpy()
+    latlons = full_df[["lat", "lon"]].to_numpy()
+
+    return Y, X, latlons, split
 
 
 def split_idxs_train_test(n, nums_train_test=None, frac_test=None, seed=0):
@@ -271,21 +302,36 @@ def merge_dropna_transform_split_train_test(c, app, X, latlons, ACS=False, seed=
     print("Loading labels...")
     Y = mio.get_Y(c, c_app["colname"], ACS=ACS)
 
-    ## merge X and Y accounting for different ordering
+    ## get train/test/val split
+    split = mio.get_split(c, c_app["sampling"], ACS=ACS)
+
+    ## merge X, Y, and split accounting for different ordering
     ## and the sampling type
     print("Merging labels and features...")
-    Y, X, latlons = merge(Y, X, latlons)
+    #Y, X, latlons = merge(Y, X, latlons)  # instroduces NaNs
+    Y, X, latlons, split = merge_YXsplit(Y, c_app["colname"], X, split)
 
     ## drop obs and log transform if needed
-    X, Y, latlons = transforms.dropna_and_transform(X, Y, latlons, c_app)
+    (X, Y, latlons), split = transforms.dropna_and_transform(X, Y, latlons, split, c_app)
 
     ## Split the data into the training/validation sample vs. test sample
     ## (discarding test set for now to keep memory low)
     print("Splitting training/test...")
-    X_train, X_test, Y_train, Y_test, idxs_train, idxs_test = split_data_train_test(
+
+    #seperate training/val from test
+    """X_train, X_test, Y_train, Y_test, idxs_train, idxs_test = split_data_train_test(
         X, Y, frac_test=c.ml_model["test_set_frac"], seed=seed, return_idxs=True
-    )
+    )"""
+
+    idxs_test = np.array(split[:,4] == "test").flatten()
+    idxs_train = ~idxs_test
+    #idxs_test = list(idxs_test)
+    X_train = X[idxs_train]
+    X_test = X[idxs_test]
+    Y_train = Y[idxs_train]
+    Y_test = Y[idxs_test]
     latlons_train = latlons[idxs_train]
     latlons_test = latlons[idxs_test]
+    split_train = split[idxs_train]
 
-    return X_train, X_test, Y_train, Y_test, latlons_train, latlons_test
+    return X_train, X_test, Y_train, Y_test, latlons_train, latlons_test, split_train

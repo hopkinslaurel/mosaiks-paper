@@ -144,7 +144,20 @@ def get_Y(c, y_labels, ACS=False):
     if ACS:
         # need to add an ACS layer in the filepath
         fpath = fpath.parent.parent / "ACS" / fpath.parent.name / fpath.name
-    return pd.read_csv(fpath, index_col="ID")[y_labels].sort_index()
+    #return pd.read_csv(fpath, index_col="ID")[y_labels].sort_index()
+    df = pd.read_csv(fpath, index_col="ID")
+    return df
+
+def get_split(c, sampling, ACS=False):
+    """Load file specifying spatial splits for train/val/test"""
+    fpath = Path(c.features_dir)
+    split_file = Path(f'CONTUS_16_640_{sampling}_100000_0_split.csv')
+    fpath = fpath / split_file
+
+    if ACS:
+        # need to add an ACS layer in the filepath
+        fpath = fpath.parent.parent / "ACS" / fpath.parent.name / fpath.name
+    return pd.read_csv(fpath, index_col="ID")
 
 
 def get_multiple_Y(

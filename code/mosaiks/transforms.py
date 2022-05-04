@@ -18,21 +18,34 @@ def dropna_Y(Y, label):
     return Y, valid
 
 
-def dropna(X, Y, latlon, c_app):
-    Y = Y.squeeze()
+def dropna_X(X):
+    valid = np.all(~np.isnan(X), axis=1) & np.all(~np.isinf(X), axis=1)
 
+    # drop
+    X = X[valid]
+
+    return X, valid
+
+
+def dropna(X, Y, latlon, split, c_app):
+    Y = Y.squeeze()
     # drop obs with missing labels:
     Y, valid = dropna_Y(Y, c_app["application"])
     latlon = latlon[valid]
     X = X[valid]
-    return X, Y, latlon
+    split = split[valid]
+
+    # check for any NA values in X
+    #X, valid = dropna_X(X)
+
+    return X, Y, latlon, split
 
 
-def dropna_and_transform(X, Y, latlon, c_app):
+def dropna_and_transform(X, Y, latlon, split, c_app):
     name = c_app["application"]
-    X, Y, latlon = dropna(X, Y, latlon, c_app)
+    X, Y, latlon, split = dropna(X, Y, latlon, split, c_app)
     transform_func = globals()["transform_" + name]
-    return transform_func(X, Y, latlon, c_app["logged"])
+    return transform_func(X, Y, latlon, c_app["logged"]), split
 
 
 def transform_elevation(X, Y, latlon, log):

@@ -101,16 +101,22 @@ def ridge_regression(
         X_train, y_train, y_test
     )
     n_lambdas = len(lambdas)
+    print(X_train.shape)
+    print(X_test.shape)
+    print(y_train.shape)
+    print(y_test.shape)
 
     # center data if needed
     X_train, y_train, X_offset, y_offset, _ = _preprocess_data(
         X_train, y_train, intercept, normalize=False
     )
+    print("preporcessed")
 
     # set up the data structures for reporting results
     results_dict = _initialize_results_arrays(
         (n_outcomes, n_lambdas), return_preds, return_model
     )
+    print("initialized")
 
     t1 = time.time()
 
@@ -132,7 +138,7 @@ def ridge_regression(
     else:
         XtX = X_train.T.dot(X_train)
         XtY = X_train.T.dot(y_train)
-
+    print("computed")
     if DEBUG:
         t2 = time.time()
         print("Time to create XtX matrix:", t2 - t1)
@@ -141,15 +147,18 @@ def ridge_regression(
     training_time = 0
     pred_time = 0
     for lx, lambdan in enumerate(lambdas):
+        print(lambdan)
         if DEBUG:
             t3 = time.time()
 
         # train model
         if svd_solve:
+            print("svd_solve")
             s_lambda = s / (s ** 2 + lambdan * xp.ones_like(s))
             model = (V * s_lambda).dot(UT_dot_y_train)
             lambda_warning = None
         else:
+            print("! svd_solve")
             with warnings.catch_warnings(record=True) as w:
                 # bind warnings to the value of w
                 warnings.simplefilter("always")
@@ -159,6 +168,7 @@ def ridge_regression(
                     XtY,
                     **linalg_solve_kwargs,
                 )
+                print("created model")
 
                 # if there is a warning
                 if len(w) > 1:
@@ -188,7 +198,7 @@ def ridge_regression(
         #####################
         # compute predictions
         #####################
-
+        print("predictions")
         # send to gpu if available
         X_test = xp.asarray(X_test)
         y_test = xp.asarray(y_test)
@@ -255,6 +265,7 @@ def ridge_regression(
 def kfold_solve(
     X,
     y,
+    split,
     solve_function=ridge_regression,
     num_folds=5,
     return_preds=True,
@@ -307,7 +318,7 @@ def kfold_solve(
     """
     assert num_folds > 1
 
-    kf = KFold(n_splits=num_folds, shuffle=True, random_state=0)
+    #kf = KFold(n_splits=num_folds, shuffle=True, random_state=0)
 
     # keep track of all runs over several iterations
     kfold_metrics_test = []
@@ -321,7 +332,10 @@ def kfold_solve(
     i = 0
     print("on fold (of {0}): ".format(num_folds), end="")
 
-    for train_idxs, val_idxs in kf.split(X):
+    for fold in range(num_folds):
+        val_idxs = np.array(split[:,4] == str(fold)).flatten()
+        train_idxs = ~val_idxs
+
         i += 1
         print("{0} ".format(i), end="")
 
@@ -358,13 +372,22 @@ def kfold_solve(
         hp_warnings.append(solve_results["hp_warning"])
 
     # Return results
+    print("RESULTS")
+    print(kfold_y_train.shape)
+    print(kfold_y_test.shape)
+    print(kfold_y_test)
+
     rets = {
         "metrics_test": np.array(kfold_metrics_test),
         "metrics_train": np.array(kfold_metrics_train),
         "y_true_test": np.array(kfold_y_test),
         "y_true_train": np.array(kfold_y_train),
         "hp_warning": np.array(hp_warnings),
-        "cv": kf,
+        #"cv": split[],
+        "lat_test": split[val_idxs,1] ,   # 0:lon, 1:lat
+        "lon_test": split[val_idxs,0],
+        "lat_train": split[train_idxs,1],
+        "lon_train": split[train_idxs,0],
     }
 
     if return_preds:
